@@ -1,0 +1,121 @@
+// meml – XML replacement written in Rust with the pest library <https://pest.rs>.
+// Developed to be used in ygo_destiny <https://github.com/myu-jiku/ygo_destiny/>.
+// Copyright (C) 2022  myujiku
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published
+// by the Free Software Foundation, either version 3 of the License,
+// or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+// Base elements
+name         = { (ASCII_ALPHA | "_" | "-")+ ~ ASCII_DIGIT* }
+value        = { ASCII_DIGIT ~ ASCII_DIGIT* }
+delim        = { "," | ";" | ":" | "|" | "/" | "\\" | "&" | " " }
+string       = { (const_use | text)* }
+delim_arg    = _{ "[" ~ delim ~ "]" }
+line         = _{ (!NEWLINE ~ ANY)* }
+indent       = _{ " "{4} | "\t" }
+arrow        = _{ " -> " }
+def          = _{ "+" }
+const_ident  = _{ "$" }
+list_ident   = _{ "*" }
+macro_ident  = _{ "@" }
+extern_ident = _{ "^" }
+mute_ident   = _{ "." }
+object_ident = _{ "/" }
+text         = @{ (!(const_use | macro_expand | NEWLINE) ~ ANY)+ }
+
+
+// Comments
+comment     = _{ "//" ~ line }
+
+mute_block  = _{
+    mute_ident ~ line ~ (NEWLINE ~ indent ~ line)*
+}
+mute_object = _{
+    PUSH(indent*) ~ mute_ident ~ line ~
+    (NEWLINE ~ (PEEK ~ indent{2}) ~ line)* ~
+    DROP
+}
+
+
+// Definitions and substitutions
+const_def_local  =  { def ~ const_ident ~ name ~ (" " ~ string)? }
+const_def_extern =  { extern_ident ~ const_def_local }
+const_def        = _{ const_def_local | const_def_extern }
+const_use_local  =  { const_ident ~ name ~ "\\" }
+const_use_extern =  { extern_ident ~ const_use_local }
+const_use        = _{ const_use_local | const_use_extern }
+
+object_def_local  =  { def ~ const_ident ~ name ~ " " ~ (object | macro_expand) }
+object_def_extern =  { extern_ident ~ object_def_local }
+object_def        = _{ object_def_local | object_def_extern }
+object_use_local  =  { const_ident ~ name }
+object_use_extern =  { extern_ident ~ object_use_local }
+object_use        = _{ object_use_local | object_use_extern }
+
+list_def_local     =  { def ~ list_ident ~ name ~ (NEWLINE ~ indent ~ string)+ }
+list_def_extern    =  { extern_ident ~ list_def_local }
+list_def           = _{ list_def_local | list_def_extern }
+list_expand_local  =  { list_ident ~ name ~ arrow ~ object+ }
+list_expand_extern =  { extern_ident ~ list_expand_local }
+list_expand        = _{ list_expand_local | list_expand_extern }
+
+macro_def_local     =  {
+    def ~ macro_ident ~ name ~
+    "[" ~ value ~ "]" ~ delim_arg? ~
+    ((NEWLINE ~ &indent) | " ") ~ object ~
+    (NEWLINE ~ &indent ~ object)*
+}
+macro_def_extern    =  { extern_ident ~ macro_def_local }
+macro_def           = _{ macro_def_local | macro_def_extern }
+macro_expand_local  =  {
+    PUSH(indent*) ~
+    macro_ident ~ name ~ delim_arg? ~ " " ~ string ~ object_body* ~
+    DROP
+}
+macro_expand_extern =  { extern_ident ~ macro_expand_local }
+macro_expand        = _{ macro_expand_local | macro_expand_extern }
+
+
+// Object components
+object          =  {
+    PUSH(indent*) ~
+    object_ident ~ name ~ object_pre_body? ~ object_body* ~
+    DROP
+}
+object_pre_body = _{ " " ~ (object | property | content) }
+object_body     = _{
+    NEWLINE ~ (
+        (PEEK ~ indent ~ (
+            property | object_use | list_expand |
+            content | mute_object | comment
+        )) |
+        (&(PEEK ~ indent) ~ (object | macro_expand))
+    )
+}
+
+property = { "* " ~ name ~ (" " ~ string)? }
+content  = { "=" ~ " " ~ string }
+
+
+// A complete meml file
+meml = _{ SOI ~ (
+    // Definitions
+    object_def // has to be matched first
+    | const_def | list_def | macro_def |
+    // Substitutions
+    object_use | list_expand | macro_expand |
+    // Non-indented objects
+    !(indent) ~ object |
+    // Ignored lines
+    comment | mute_block | mute_object | NEWLINE
+)* ~ EOI }
