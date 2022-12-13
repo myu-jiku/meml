@@ -48,7 +48,7 @@ pub fn get_definitions(meml: Pairs<Rule>) -> (
     let mut remaining = Vec::new();
 
     for pair in meml {
-        Lmatch pair.as_rule() {
+        match pair.as_rule() {
             Rule::const_def_local => (),
             Rule::const_def_extern => (),
             Rule::object_def_local => (),
