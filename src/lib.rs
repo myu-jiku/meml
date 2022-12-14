@@ -1,6 +1,6 @@
 /*
 meml – XML replacement written in Rust with the pest library <https://pest.rs>.
-Developed to be used in ygo_destiny <https://github.com/myu-jiku/ygo_destiny/>.
+Developed to be used in ygo_destiny <https://github.com/myuujiku/ygo_destiny/>.
 Copyright (C) 2022  myujiku
 
 This program is free software: you can redistribute it and/or modify
