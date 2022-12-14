@@ -17,8 +17,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+mod macro_fn;
 mod object;
 
+use core::fmt::Debug;
 use std::collections::HashMap;
 
 use pest::iterators::{
@@ -27,13 +29,15 @@ use pest::iterators::{
 };
 
 use crate::Rule;
+use macro_fn::MacroFn;
 use object::Object;
 
 #[derive(Debug)]
 pub enum Definition {
     Constant(String),
     Object(Object),
-    Macro,
+    List(Vec<String>),
+    Macro(MacroFn),
 }
 
 pub fn get_definitions(meml: Pairs<Rule>) -> (
@@ -55,7 +59,7 @@ pub fn get_definitions(meml: Pairs<Rule>) -> (
                         parse_string(inner_rules.next().unwrap(), &local_defs, &ext_defs)
                     ),
                 );
-            },
+            }
             Rule::const_def_extern => {
                 let mut inner_rules = pair.into_inner();
                 ext_defs.insert(
@@ -64,7 +68,7 @@ pub fn get_definitions(meml: Pairs<Rule>) -> (
                         parse_string(inner_rules.next().unwrap(), &local_defs, &ext_defs)
                     ),
                 );
-            },
+            }
             Rule::object_def_local => {
                  let mut inner_rules = pair.into_inner();
                  local_defs.insert(
@@ -79,16 +83,33 @@ pub fn get_definitions(meml: Pairs<Rule>) -> (
                     Definition::Object(Object::construct(inner_rules.next().unwrap(), &local_defs, &ext_defs)),
                  );
             }
-            Rule::list_def_local => (),
-            Rule::list_def_extern => (),
-            Rule::macro_def_local => (),
-            Rule::macro_def_extern => (),
+            Rule::list_def_local => {
+                let mut inner_rules = pair.into_inner();
+                local_defs.insert(
+                    format!("*{}", inner_rules.next().unwrap().as_str().to_string()),
+                    Definition::List(inner_rules.map(|p| parse_string(p, &local_defs, &ext_defs)).collect()),
+                );
+            }
+            Rule::list_def_extern => {
+                let mut inner_rules = pair.into_inner().next().unwrap().into_inner();
+                ext_defs.insert(
+                    format!("*{}", inner_rules.next().unwrap().as_str().to_string()),
+                    Definition::List(inner_rules.map(|p| parse_string(p, &local_defs, &ext_defs)).collect()),
+                );
+            }
+            Rule::macro_def_local => {
+                let object_builder = MacroFn::construct(pair);
+                local_defs.insert(object_builder.0, object_builder.1);
+            }
+            Rule::macro_def_extern => {
+                let object_builder = MacroFn::construct(pair);
+                ext_defs.insert(object_builder.0, object_builder.1);
+            }
             Rule::EOI => (),
             _ => remaining.push(pair),
         }
     }
 
-    // println!("{:#?}", remaining);
     println!("defs {:#?}", local_defs);
     return (local_defs, ext_defs, remaining);
 }
@@ -123,52 +144,4 @@ fn parse_string(
         }
     }
     return result;
-}
-
-pub fn create_macro(pair: Pair<Rule>) -> (String, Box<dyn Fn(String, String) -> String>) {
-    let mut inner_rules = pair.into_inner();
-    let name = inner_rules.next().unwrap().as_str().to_string();
-    let arg_count = usize::from_str(inner_rules.next().unwrap().as_str()).unwrap();
-    let result = String::new();
-
-    let delimiter = if let Ok(next) = inner_rules.next() {
-        match next.as_rule() {
-            Rule::delim => next.as_str().to_string(),
-            Rule::object => {
-                result.push_str(next.as_str());
-                ",".to_string()
-            }
-            _ => unreachable!(),
-        }
-    };
-
-    result.push_str(inner_rules.as_str());
-
-    (name.to_string(), Box::new(move |raw_args: String, delim_arg| {
-        let args: Vec<&str> = raw_args.split(
-            &match delim_arg.is_empty() {
-                true => delemiter.clone(),
-                false => delim_arg,
-            }
-        ).collect();
-
-        if args.len() != arg_count {
-            // TODO: Prettify with span
-            panic!("Call of macro `{}`: expected {} arguments but got {}.", name, arg_count, args.len());
-        }
-
-        let mut result = result.clone();
-
-        for arg_n in 1..=arg_count {
-            let placeholder = format!("#{}", arg_n);
-            if !result.contains(&placeholder) {
-                // TODO: Prettify with span
-                panic!("Macro `{}`: expected place holder `{}`,", name, placeholder);
-            } else {
-                result = result.replace(&placeholder, args[arg_n - 1]);
-            }
-        }
-
-        return result;
-    }))
 }
