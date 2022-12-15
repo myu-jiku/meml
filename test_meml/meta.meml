@@ -15,15 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-+$local_const test
-
-+@test[3] /object = #1
-
-+*list
-    test1
-    test2
-
 /main
+    * action xml
     * directory input/
-    * target output/$BASENAME\.meml
-
+    * file 3.meml
+    * target output/
+    * override_ext xml
