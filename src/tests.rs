@@ -23,4 +23,3 @@ use super::*;
 fn test_manifest() {
     parse_manifest("test_meml/meta.meml");
 }
-

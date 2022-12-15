@@ -53,21 +53,25 @@ impl MacroFn {
 
         result.push_str(inner_rules.as_str());
 
-
         (
             format!("@{}", name),
             Definition::Macro(Self {
                 function: Box::new(move |raw_args: String, delim_arg: String| {
-                    let args: Vec<&str> = raw_args.split(
-                        &match delim_arg.is_empty() {
+                    let args: Vec<&str> = raw_args
+                        .split(&match delim_arg.is_empty() {
                             true => delimiter.clone(),
                             false => delim_arg,
-                        }
-                    ).collect();
+                        })
+                        .collect();
 
                     if args.len() != arg_count {
                         // TODO: Prettify with span
-                        panic!("Call of macro `{}`: expected {} arguments but got {}.", name, arg_count, args.len());
+                        panic!(
+                            "Call of macro `{}`: expected {} arguments but got {}.",
+                            name,
+                            arg_count,
+                            args.len()
+                        );
                     }
 
                     let mut result = result.clone();
@@ -83,7 +87,7 @@ impl MacroFn {
                     }
 
                     result
-                })
+                }),
             }),
         )
     }

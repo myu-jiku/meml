@@ -23,10 +23,7 @@ mod object;
 use core::fmt::Debug;
 use std::collections::HashMap;
 
-use pest::iterators::{
-    Pair,
-    Pairs,
-};
+use pest::iterators::{Pair, Pairs};
 
 use crate::Rule;
 use macro_fn::MacroFn;
@@ -40,13 +37,17 @@ pub enum Definition {
     Macro(MacroFn),
 }
 
-pub fn get_definitions(meml: Pairs<Rule>) -> (
+pub fn get_definitions<'a>(
+    meml: Pairs<'a, Rule>,
+    ext_defs: &'a HashMap<String, Definition>,
+    meta_properties: &'a HashMap<String, HashMap<String, Vec<String>>>,
+) -> (
     HashMap<String, Definition>,
     HashMap<String, Definition>,
-    Vec<Pair<Rule>>,
+    Vec<Pair<'a, Rule>>,
 ) {
     let mut local_defs = HashMap::new();
-    let mut ext_defs = HashMap::new();
+    let mut exports = HashMap::new();
     let mut remaining = Vec::new();
 
     for pair in meml {
@@ -55,46 +56,66 @@ pub fn get_definitions(meml: Pairs<Rule>) -> (
                 let mut inner_rules = pair.into_inner();
                 local_defs.insert(
                     format!("${}", inner_rules.next().unwrap().as_str()),
-                    Definition::Constant(
-                        parse_string(inner_rules.next().unwrap(), &local_defs, &ext_defs)
-                    ),
+                    Definition::Constant(parse_string(
+                        inner_rules.next().unwrap(),
+                        &local_defs,
+                        &ext_defs,
+                    )),
                 );
             }
             Rule::const_def_extern => {
                 let mut inner_rules = pair.into_inner();
-                ext_defs.insert(
+                exports.insert(
                     format!("${}", inner_rules.next().unwrap().as_str()),
-                    Definition::Constant(
-                        parse_string(inner_rules.next().unwrap(), &local_defs, &ext_defs)
-                    ),
+                    Definition::Constant(parse_string(
+                        inner_rules.next().unwrap(),
+                        &local_defs,
+                        &ext_defs,
+                    )),
                 );
             }
             Rule::object_def_local => {
-                 let mut inner_rules = pair.into_inner();
-                 local_defs.insert(
+                let mut inner_rules = pair.into_inner();
+                local_defs.insert(
                     format!("/{}", inner_rules.next().unwrap()),
-                    Definition::Object(Object::construct(inner_rules.next().unwrap(), &local_defs, &ext_defs)),
-                 );
+                    Definition::Object(Object::construct(
+                        inner_rules.next().unwrap(),
+                        &local_defs,
+                        &ext_defs,
+                    )),
+                );
             }
             Rule::object_def_extern => {
-                 let mut inner_rules = pair.into_inner();
-                 ext_defs.insert(
+                let mut inner_rules = pair.into_inner();
+                exports.insert(
                     format!("/{}", inner_rules.next().unwrap()),
-                    Definition::Object(Object::construct(inner_rules.next().unwrap(), &local_defs, &ext_defs)),
-                 );
+                    Definition::Object(Object::construct(
+                        inner_rules.next().unwrap(),
+                        &local_defs,
+                        &ext_defs,
+                    )),
+                );
             }
             Rule::list_def_local => {
                 let mut inner_rules = pair.into_inner();
                 local_defs.insert(
                     format!("*{}", inner_rules.next().unwrap().as_str().to_string()),
-                    Definition::List(inner_rules.map(|p| parse_string(p, &local_defs, &ext_defs)).collect()),
+                    Definition::List(
+                        inner_rules
+                            .map(|p| parse_string(p, &local_defs, &ext_defs))
+                            .collect(),
+                    ),
                 );
             }
             Rule::list_def_extern => {
                 let mut inner_rules = pair.into_inner().next().unwrap().into_inner();
-                ext_defs.insert(
+                exports.insert(
                     format!("*{}", inner_rules.next().unwrap().as_str().to_string()),
-                    Definition::List(inner_rules.map(|p| parse_string(p, &local_defs, &ext_defs)).collect()),
+                    Definition::List(
+                        inner_rules
+                            .map(|p| parse_string(p, &local_defs, &ext_defs))
+                            .collect(),
+                    ),
                 );
             }
             Rule::macro_def_local => {
@@ -103,7 +124,7 @@ pub fn get_definitions(meml: Pairs<Rule>) -> (
             }
             Rule::macro_def_extern => {
                 let object_builder = MacroFn::construct(pair);
-                ext_defs.insert(object_builder.0, object_builder.1);
+                exports.insert(object_builder.0, object_builder.1);
             }
             Rule::EOI => (),
             _ => remaining.push(pair),
@@ -111,13 +132,35 @@ pub fn get_definitions(meml: Pairs<Rule>) -> (
     }
 
     println!("defs {:#?}", local_defs);
-    return (local_defs, ext_defs, remaining);
+    return (local_defs, exports, remaining);
+}
+
+pub fn get_content(
+    pairs: Vec<Pair<Rule>>,
+    local_defs: HashMap<String, Definition>,
+    ext_defs: &HashMap<String, Definition>,
+    meta_properties: &HashMap<String, HashMap<String, Vec<String>>>,
+) -> Vec<Object> {
+    let mut root = Vec::new();
+
+    for pair in pairs {
+        match pair.as_rule() {
+            Rule::object => {
+                println!("{:#?}", pair);
+                root.push(Object::construct(pair, &local_defs, &ext_defs));
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    println!("{:#?}", root);
+    return root;
 }
 
 fn parse_string(
     pair: Pair<Rule>,
     local_defs: &HashMap<String, Definition>,
-    ext_defs: &HashMap<String, Definition>
+    ext_defs: &HashMap<String, Definition>,
 ) -> String {
     let mut result = String::new();
 
@@ -140,7 +183,7 @@ fn parse_string(
                 } else {
                     println!("{:#?}", span);
                 }
-            },
+            }
         }
     }
     return result;
