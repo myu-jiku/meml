@@ -85,6 +85,8 @@ macro_expand_local  =  {
 macro_expand_extern =  { extern_ident ~ macro_expand_local }
 macro_expand        = _{ macro_expand_local | macro_expand_extern }
 
+meta_property_expand = { extern_ident ~ name ~ "." ~ name ~ arrow ~ object+ }
+
 
 // Object components
 object          =  {
@@ -96,7 +98,7 @@ object_pre_body = _{ " " ~ (object | property | content) }
 object_body     = _{
     NEWLINE ~ (
         (PEEK ~ indent ~ (
-            property | object_use | list_expand |
+            property | object_use | list_expand | meta_property_expand |
             content | mute_object | comment
         )) |
         (&(PEEK ~ indent) ~ (object | macro_expand))
