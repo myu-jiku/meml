@@ -64,7 +64,7 @@ pub fn get_definitions<'a>(
                 );
             }
             Rule::const_def_extern => {
-                let mut inner_rules = pair.into_inner();
+                let mut inner_rules = pair.into_inner().next().unwrap().into_inner();
                 exports.insert(
                     format!("${}", inner_rules.next().unwrap().as_str()),
                     Definition::Constant(parse_string(
@@ -86,7 +86,7 @@ pub fn get_definitions<'a>(
                 );
             }
             Rule::object_def_extern => {
-                let mut inner_rules = pair.into_inner();
+                let mut inner_rules = pair.into_inner().next().unwrap().into_inner();
                 exports.insert(
                     format!("/{}", inner_rules.next().unwrap()),
                     Definition::Object(Object::construct(
@@ -123,7 +123,7 @@ pub fn get_definitions<'a>(
                 local_defs.insert(object_builder.0, object_builder.1);
             }
             Rule::macro_def_extern => {
-                let object_builder = MacroFn::construct(pair);
+                let object_builder = MacroFn::construct(pair.into_inner().next().unwrap());
                 exports.insert(object_builder.0, object_builder.1);
             }
             Rule::EOI => (),
