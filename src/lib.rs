@@ -40,7 +40,7 @@ pub fn parse_manifest(manifest_path: &str) {
 
     let parser_result = MemlParser::parse(Rule::meml, &raw_content);
     if parser_result.is_err() {
-        panic!("{}", parser_result.unwrap());
+        panic!("{}", parser_result.unwrap_err());
     }
 
     let temp_maps = (HashMap::new(), HashMap::new());
@@ -119,7 +119,7 @@ pub fn parse_manifest(manifest_path: &str) {
 
                     let parser_result = MemlParser::parse(Rule::meml, &raw_content);
                     if parser_result.is_err() {
-                        panic!("{}", parser_result.unwrap());
+                        panic!("{}", parser_result.unwrap_err());
                     }
 
                     let (defs, exports, unparsed) = parser::get_definitions(
