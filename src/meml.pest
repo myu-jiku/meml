@@ -31,6 +31,7 @@ macro_ident  = _{ "@" }
 extern_ident = _{ "^" }
 mute_ident   = _{ "." }
 object_ident = _{ "/" }
+objdef_ident = _{ "!" }
 text         = @{ (!(const_use | macro_expand | NEWLINE) ~ ANY)+ }
 
 
@@ -55,10 +56,10 @@ const_use_local  =  { const_ident ~ name ~ "\\" }
 const_use_extern =  { extern_ident ~ const_use_local }
 const_use        = _{ const_use_local | const_use_extern }
 
-object_def_local  =  { def ~ const_ident ~ name ~ " " ~ (object | macro_expand) }
+object_def_local  =  { def ~ objdef_ident ~ name ~ " " ~ (object | macro_expand) }
 object_def_extern =  { extern_ident ~ object_def_local }
 object_def        = _{ object_def_local | object_def_extern }
-object_use_local  =  { const_ident ~ name }
+object_use_local  =  { objdef_ident ~ name }
 object_use_extern =  { extern_ident ~ object_use_local }
 object_use        = _{ object_use_local | object_use_extern }
 
