@@ -78,13 +78,13 @@ macro_def_local     =  {
 }
 macro_def_extern    =  { extern_ident ~ macro_def_local }
 macro_def           = _{ macro_def_local | macro_def_extern }
-macro_expand_local  =  {
+macro_expand_local  =  { macro_ident ~ name ~ delim_arg? ~ " " ~ string ~ object_body* }
+macro_expand_extern =  { extern_ident ~ macro_expand_local }
+macro_expand        = _{
     PUSH(indent*) ~
-    macro_ident ~ name ~ delim_arg? ~ " " ~ string ~ object_body* ~
+    (macro_expand_local | macro_expand_extern) ~
     DROP
 }
-macro_expand_extern =  { extern_ident ~ macro_expand_local }
-macro_expand        = _{ macro_expand_local | macro_expand_extern }
 
 meta_property_expand = { extern_ident ~ name ~ "." ~ name ~ arrow ~ object+ }
 
