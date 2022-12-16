@@ -1,4 +1,4 @@
-+$const test
+new $const test
 
 /test
     = $const\
