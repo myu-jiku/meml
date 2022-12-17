@@ -59,7 +59,7 @@ const_use_local  =  { const_ident ~ name ~ "\\" }
 const_use_extern =  { extern_ident ~ const_use_local }
 const_use        = _{ const_use_local | const_use_extern }
 
-object_def_local  =  { objdef_ident ~ name ~ " " ~ (object | macro_expand) }
+object_def_local  =  { objdef_ident ~ name ~ " " ~ object }
 object_def_extern =  { extern_ident ~ object_def_local }
 object_def        = _{ def ~ (object_def_local | object_def_extern) }
 object_use_local  =  { objdef_ident ~ name }
