@@ -94,9 +94,10 @@ include = { include_ident ~ def_ident ~ name ~ (rename_ident ~ name)? }
 
 
 // Object components
-object          =  {
+object          =  { object_ident ~ name ~ object_pre_body? ~ object_body* }
+indented_object = _{
     PUSH(indent*) ~
-    object_ident ~ name ~ object_pre_body? ~ object_body* ~
+    object ~
     DROP
 }
 object_pre_body = _{ " " ~ (object | property | content) }
@@ -106,7 +107,7 @@ object_body     = _{
             property | object_use | list_expand | meta_property_expand |
             content | mute_object | comment
         )) |
-        (&(PEEK ~ indent) ~ (object | macro_expand))
+        (&(PEEK ~ indent) ~ (indented_object | macro_expand))
     )
 }
 
@@ -121,7 +122,7 @@ meml = _{ SOI ~ (
     // Substitutions
     object_use | list_expand | macro_expand | include |
     // Non-indented objects
-    !(indent) ~ object |
+    !(indent) ~ indented_object |
     // Ignored lines
     comment | mute_block | mute_object | NEWLINE
 )* ~ EOI }
