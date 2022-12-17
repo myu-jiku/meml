@@ -50,8 +50,6 @@ pub fn parse_manifest(manifest_path: &str) {
     let mut meta_properties: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
     let root_path = Path::new(manifest_path).parent().unwrap();
     for section in parser::get_content(unparsed, local_defs, &temp_maps.0, &temp_maps.1) {
-        println!("{}", section.as_xml());
-
         let mut action = "".to_string();
         let mut directories = Vec::new();
         let mut files = Vec::new();
@@ -72,7 +70,7 @@ pub fn parse_manifest(manifest_path: &str) {
         } else if target.is_empty() {
         } else {
             if !(directories.is_empty() && files.is_empty()) {
-                if let Some(x) = meta_properties.insert(section.name.to_string(), HashMap::new()) {
+                if let Some(_) = meta_properties.insert(section.name.to_string(), HashMap::new()) {
                     panic!();
                 }
 
@@ -151,7 +149,7 @@ pub fn parse_manifest(manifest_path: &str) {
                     }
                 }
 
-                println!("{:#?}", meta_properties);
+                // println!("{:#?}", meta_properties);
             }
         }
     }

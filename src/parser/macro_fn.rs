@@ -21,13 +21,17 @@ use super::*;
 
 use std::str::FromStr;
 
+#[derive(Clone)]
 pub struct MacroFn {
-    pub function: Box<dyn Fn(String, String) -> String>,
+    pub arg_count: usize,
+    blueprint: String,
+    delimiter: String,
+    name: String,
 }
 
 impl Debug for MacroFn {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "MacroFn()")
+        write!(f, "{}[{}]", self.name, self.arg_count)
     }
 }
 
@@ -56,39 +60,47 @@ impl MacroFn {
         (
             format!("@{}", name),
             Definition::Macro(Self {
-                function: Box::new(move |raw_args: String, delim_arg: String| {
-                    let args: Vec<&str> = raw_args
-                        .split(&match delim_arg.is_empty() {
-                            true => delimiter.clone(),
-                            false => delim_arg,
-                        })
-                        .collect();
-
-                    if args.len() != arg_count {
-                        // TODO: Prettify with span
-                        panic!(
-                            "Call of macro `{}`: expected {} arguments but got {}.",
-                            name,
-                            arg_count,
-                            args.len()
-                        );
-                    }
-
-                    let mut result = result.clone();
-
-                    for arg_n in 1..=arg_count {
-                        let placeholder = format!("#{}", arg_n);
-                        if !result.contains(&placeholder) {
-                            // TODO: Prettify with span
-                            panic!("Macro `{}`: expected place holder `{}`,", name, placeholder);
-                        } else {
-                            result = result.replace(&placeholder, args[arg_n - 1]);
-                        }
-                    }
-
-                    result
-                }),
+                arg_count: arg_count,
+                blueprint: result,
+                delimiter: delimiter,
+                name: name,
             }),
         )
+    }
+
+    pub fn call(&self, raw_args: String, delim_arg: String) -> String {
+        let args: Vec<&str> = raw_args
+            .split(&match delim_arg.is_empty() {
+                true => self.delimiter.clone(),
+                false => delim_arg,
+            })
+            .collect();
+
+        if args.len() != self.arg_count {
+            // TODO: Prettify with span
+            panic!(
+                "Call of macro `{}`: expected {} arguments but got {}.",
+                self.name,
+                self.arg_count,
+                args.len()
+            );
+        }
+
+        let mut result = self.blueprint.clone();
+
+        for arg_n in 1..=self.arg_count {
+            let placeholder = format!("#{}", arg_n);
+            if !result.contains(&placeholder) {
+                // TODO: Prettify with span
+                panic!(
+                    "Macro `{}`: expected place holder `{}`.",
+                    self.name, placeholder
+                );
+            } else {
+                result = result.replace(&placeholder, args[arg_n - 1].trim());
+            }
+        }
+
+        return result;
     }
 }

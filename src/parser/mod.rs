@@ -27,12 +27,12 @@ use pest::iterators::{Pair, Pairs};
 
 use crate::Rule;
 use macro_fn::MacroFn;
-use object::Object;
+use object::{Object, ObjectBuilder};
 
-#[derive(Debug)]
-pub enum Definition {
+#[derive(Clone, Debug)]
+pub enum Definition<'a> {
     Constant(String),
-    Object(Object),
+    Object(ObjectBuilder<'a>),
     List(Vec<String>),
     Macro(MacroFn),
 }
@@ -42,8 +42,8 @@ pub fn get_definitions<'a>(
     ext_defs: &'a HashMap<String, Definition>,
     meta_properties: &'a HashMap<String, HashMap<String, Vec<String>>>,
 ) -> (
-    HashMap<String, Definition>,
-    HashMap<String, Definition>,
+    HashMap<String, Definition<'a>>,
+    HashMap<String, Definition<'a>>,
     Vec<Pair<'a, Rule>>,
 ) {
     let mut local_defs = HashMap::new();
@@ -77,23 +77,15 @@ pub fn get_definitions<'a>(
             Rule::object_def_local => {
                 let mut inner_rules = pair.into_inner();
                 local_defs.insert(
-                    format!("/{}", inner_rules.next().unwrap()),
-                    Definition::Object(Object::construct(
-                        inner_rules.next().unwrap(),
-                        &local_defs,
-                        &ext_defs,
-                    )),
+                    format!("!{}", inner_rules.next().unwrap().as_str()),
+                    Definition::Object(Object::builder(inner_rules.next().unwrap())),
                 );
             }
             Rule::object_def_extern => {
                 let mut inner_rules = pair.into_inner().next().unwrap().into_inner();
                 exports.insert(
-                    format!("/{}", inner_rules.next().unwrap()),
-                    Definition::Object(Object::construct(
-                        inner_rules.next().unwrap(),
-                        &local_defs,
-                        &ext_defs,
-                    )),
+                    format!("!{}", inner_rules.next().unwrap().as_str()),
+                    Definition::Object(Object::builder(inner_rules.next().unwrap())),
                 );
             }
             Rule::list_def_local => {
@@ -126,12 +118,22 @@ pub fn get_definitions<'a>(
                 let object_builder = MacroFn::construct(pair.into_inner().next().unwrap());
                 exports.insert(object_builder.0, object_builder.1);
             }
+            Rule::include => {
+                let mut inner_rules = pair.into_inner();
+                let def_name = format!(
+                    "{}{}",
+                    inner_rules.next().unwrap().as_str(),
+                    inner_rules.next().unwrap().as_str()
+                );
+                let value = ext_defs.get(&def_name);
+                local_defs.insert(def_name, value.unwrap().clone());
+            }
             Rule::EOI => (),
             _ => remaining.push(pair),
         }
     }
 
-    println!("defs {:#?}", local_defs);
+    // println!("defs {:#?}", local_defs);
     return (local_defs, exports, remaining);
 }
 
@@ -146,14 +148,14 @@ pub fn get_content(
     for pair in pairs {
         match pair.as_rule() {
             Rule::object => {
-                println!("{:#?}", pair);
+                // println!("{:#?}", pair);
                 root.push(Object::construct(pair, &local_defs, &ext_defs));
             }
             _ => unreachable!(),
         }
     }
 
-    println!("{:#?}", root);
+    // println!("{:#?}", root);
     return root;
 }
 
