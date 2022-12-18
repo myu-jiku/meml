@@ -69,14 +69,14 @@ object_use        = _{ object_use_local | object_use_extern }
 list_def_local     =  { list_ident ~ name ~ (NEWLINE ~ indent ~ string)+ }
 list_def_extern    =  { extern_ident ~ list_def_local }
 list_def           = _{ def ~ (list_def_local | list_def_extern) }
-list_expand_local  =  { list_ident ~ name ~ arrow ~ object+ }
+list_expand_local  =  { list_ident ~ name ~ arrow ~ indented_object+ }
 list_expand_extern =  { extern_ident ~ list_expand_local }
 list_expand        = _{ list_expand_local | list_expand_extern }
 
 macro_def_local     =  {
     macro_ident ~ name ~
     "[" ~ value ~ "]" ~ delim_arg? ~
-    ((NEWLINE ~ &indent) | " ") ~ object
+    ((NEWLINE ~ &indent) | " ") ~ indented_object
 }
 macro_def_extern    =  { extern_ident ~ macro_def_local }
 macro_def           = _{ def ~ (macro_def_local | macro_def_extern) }
@@ -88,7 +88,7 @@ macro_expand        = _{
     DROP
 }
 
-meta_property_expand = { extern_ident ~ name ~ "." ~ name ~ arrow ~ object+ }
+meta_property_expand = { extern_ident ~ name ~ "." ~ name ~ arrow ~ indented_object+ }
 
 include = { include_ident ~ def_ident ~ name ~ (rename_ident ~ name)? }
 
