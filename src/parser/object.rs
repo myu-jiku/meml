@@ -111,7 +111,7 @@ impl Object {
                     {
                         let raw_object = macro_fn.call(args.to_string(), delim.to_string());
                         let mut object = Self::construct(
-                            MemlParser::parse(Rule::object, &raw_object)
+                            MemlParser::parse(Rule::indented_object, &raw_object)
                                 .unwrap()
                                 .next()
                                 .unwrap(),
