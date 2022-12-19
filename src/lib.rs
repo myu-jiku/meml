@@ -23,136 +23,117 @@ extern crate pest_derive;
 
 mod parser;
 
-use std::{collections::HashMap, fs, path::Path};
+pub fn parse_manifest(manifest_path: &str) {}
 
-use pest::Parser;
+pub fn test() {
+    let input = r#"
+{ LICENSE
 
-#[derive(Parser)]
-#[grammar = "meml.pest"]
-pub struct MemlParser {}
+YGO Destiny – A Yu-Gi-Oh! sealed draft simulator written in rust.
+Copyright (C) 2022  myujiku
 
-pub fn parse_manifest(manifest_path: &str) {
-    if !Path::new(manifest_path).is_file() {
-        panic!("Manifest `{}` is not a file.", manifest_path);
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License version 3 as
+published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+LICENSE }
+
+
+def property(name content): property {
+    name: "${name}"
+    "${content}"
+}
+
+def class_name: "YGOWindow"
+def parent_class: "AdwApplicationWindow"
+
+interface { template {
+    class: "$(class_name)"
+    parent: "$(parent_class)"
+    property("width-request" "640")
+    property("height-request" "480")
+    property {
+        name: "content"
+        toast_overlay
     }
+}}
 
-    let raw_content = fs::read_to_string(manifest_path).expect("Could not read manifest.");
+def toast_overlay: object {
+    class: "AdwToastOverlay"
+    id: "toast_overlay"
 
-    let parser_result = MemlParser::parse(Rule::meml, &raw_content);
-    if parser_result.is_err() {
-        panic!("{}", parser_result.unwrap_err());
-    }
-
-    let temp_maps = (HashMap::new(), HashMap::new());
-    let (local_defs, ext_defs, unparsed) =
-        parser::get_definitions(parser_result.unwrap(), &temp_maps.0, &temp_maps.1);
-
-    let mut meta_properties: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
-    let root_path = Path::new(manifest_path).parent().unwrap();
-    for section in parser::get_content(unparsed, local_defs, &temp_maps.0, &temp_maps.1) {
-        let mut action = "".to_string();
-        let mut directories = Vec::new();
-        let mut files = Vec::new();
-        let mut extension = "".to_string();
-        let mut target = "".to_string();
-        for (name, value) in section.properties.iter() {
-            match name.as_str() {
-                "action" => action = value.to_string(),
-                "directory" => directories.push(value),
-                "file" => files.push(value),
-                "override_ext" => extension = value.to_string(),
-                "target" => target = value.to_string(),
-                _ => println!("{}", name),
+    child { object {
+        class: "AdwLeaflet"
+        id: "leaflet"
+        property("can-navigate-back" "true")
+        property("can-unfold" "false")
+        property("transition-type" "slide")
+        child { object {
+            class: "AdwLeafletPage"
+            property {
+                name: "child"
+                main_box
             }
-        }
+        }}
+    }}
+}
 
-        if action.is_empty() {
-        } else if target.is_empty() {
-        } else {
-            if !(directories.is_empty() && files.is_empty()) {
-                if let Some(_) = meta_properties.insert(section.name.to_string(), HashMap::new()) {
-                    panic!();
-                }
+def main_box: object {
+    class: "GtkBox"
+    property("orientation" "vertical")
+    property("vexpand" "true")
+    property("hexpand" "true")
+    header_bar
+    child { object {
+        class: "GtkScrolledWindow"
+        property("min-content-height" "200")
+        property("hscrollbar-policy" "never")
+        property("vexpand" "true")
+        child { object {
+            class: "AdwClamp"
+            property("maximum-size" "800")
+            property("orientation" "horizontal")
+            collection_list
+        }}
+    }}
+}
 
-                let mut file_paths = Vec::new();
-                for directory in directories {
-                    let path = root_path.join(directory);
-                    if path.is_dir() {
-                        file_paths.append(
-                            &mut fs::read_dir(path)
-                                .unwrap()
-                                .map(|i| i.unwrap().path())
-                                .filter(|i| {
-                                    let ext = i.extension();
-                                    ext.is_some() && ext.unwrap() == "meml"
-                                })
-                                .collect(),
-                        );
-                    } else {
-                        println!("Directory `{}` not found.", path.display());
-                    }
-                }
-
-                file_paths.append(&mut files.iter().map(|i| root_path.join(i)).collect());
-
-                println!("{:#?}", file_paths);
-
-                fs::create_dir_all(root_path.join(&target)).expect("Could not create directory.");
-
-                meta_properties
-                    .get_mut(&section.name)
-                    .unwrap()
-                    .insert("BASENAME".to_string(), Vec::new());
-                for path in file_paths {
-                    let basename = path.file_stem().unwrap().to_str().unwrap();
-                    meta_properties
-                        .get_mut(&section.name)
-                        .unwrap()
-                        .get_mut("BASENAME")
-                        .unwrap()
-                        .push(basename.to_string());
-
-                    let raw_content = fs::read_to_string(&path)
-                        .expect(&format!("Could not read file `{}`.", path.display()));
-
-                    let parser_result = MemlParser::parse(Rule::meml, &raw_content);
-                    if parser_result.is_err() {
-                        panic!("{}", parser_result.unwrap_err());
-                    }
-
-                    let (defs, exports, unparsed) = parser::get_definitions(
-                        parser_result.unwrap(),
-                        &ext_defs,
-                        &meta_properties,
-                    );
-                    let target_path = root_path.join(&target).join(format!(
-                        "{}.{}",
-                        basename.to_string(),
-                        if extension.is_empty() {
-                            ".meml"
-                        } else {
-                            &extension
-                        }
-                    ));
-
-                    let content = parser::get_content(unparsed, defs, &ext_defs, &meta_properties)
-                        .iter()
-                        .map(|i| i.as_xml())
-                        .collect::<Vec<String>>()
-                        .join("");
-
-                    if !target_path.is_file()
-                        || (content != fs::read_to_string(&target_path).unwrap())
-                    {
-                        fs::write(&target_path, content)
-                            .expect(&format!("Could not write to `{}`.", target_path.display()));
-                    }
-                }
-
-                // println!("{:#?}", meta_properties);
-            }
+def header_bar: child { object {
+    class: "AdwHeaderBar"
+    child { object {
+        class: "GtkButton"
+        property("icon-name" "open-menu-symbolic")
+    }}
+    property {
+        name: "title-widget"
+        object {
+            class: "AdwWindowTitle"
+            property("title" "YGO Destiny")
         }
     }
+}}
+
+def collection_list: child { object {
+    class: "YGOCollectionList"
+    id: "collection_list"
+    property("orientation" "vertical")
+    property("vexpand" "true")
+    property("hexpand" "true")
+    property("valign" "center")
+}}
+    "#;
+
+    let pairs = parser::parse_raw(input);
+    let (local_definitions, unparsed) = parser::get_definitions(pairs);
+    parser::get_content(unparsed, local_definitions);
 }
 
 #[cfg(test)]

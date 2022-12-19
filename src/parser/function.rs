@@ -19,7 +19,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
 
-#[test]
-fn test_parse() {
-    test()
+#[derive(Clone, Debug)]
+pub struct Function<'a> {
+    pub pair: Pair<'a, Rule>,
+    pub arg_names: Vec<String>,
+}
+
+impl Function<'_> {
+    pub fn call(&self, arguments: Vec<String>, local_definitions: &DefinitionMap) -> Element {
+        let args_len = arguments.len();
+        let names_len = self.arg_names.len();
+        
+        let args = if args_len < names_len {
+            panic!()
+        } else if args_len > names_len {
+            panic!()
+        } else {
+            self.arg_names.clone().into_iter().zip(arguments).collect()
+        };
+        
+        Element::construct(self.pair.clone(), local_definitions, Some(&args))
+    }
 }

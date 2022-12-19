@@ -17,176 +17,107 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-mod macro_fn;
-mod object;
+mod element;
+mod function;
+mod string;
 
-use core::fmt::Debug;
 use std::collections::HashMap;
 
-use pest::iterators::{Pair, Pairs};
+use pest::{
+    error::{Error, ErrorVariant},
+    iterators::{Pair, Pairs},
+    Parser,
+};
 
-use crate::Rule;
-use macro_fn::MacroFn;
-use object::{Object, ObjectBuilder};
+use element::{Element, ElementFactory};
+use function::Function;
+use string::parse_string;
+
+#[derive(Parser)]
+#[grammar = "meml.pest"]
+pub struct MemlParser {}
 
 #[derive(Clone, Debug)]
 pub enum Definition<'a> {
-    Constant(String),
-    Object(ObjectBuilder<'a>),
-    List(Vec<String>),
-    Macro(MacroFn),
+    String(String),
+    Element(ElementFactory<'a>),
+    Function(Function<'a>),
 }
 
-pub fn get_definitions<'a>(
-    meml: Pairs<'a, Rule>,
-    ext_defs: &'a HashMap<String, Definition>,
-    meta_properties: &'a HashMap<String, HashMap<String, Vec<String>>>,
-) -> (
-    HashMap<String, Definition<'a>>,
-    HashMap<String, Definition<'a>>,
-    Vec<Pair<'a, Rule>>,
-) {
-    let mut local_defs = HashMap::new();
-    let mut exports = HashMap::new();
+pub type Arguments = HashMap<String, String>;
+pub type DefinitionMap<'a> = HashMap<String, HashMap<String, Definition<'a>>>;
+
+pub fn parse_raw(raw_input: &str) -> Pairs<Rule> {
+    let pairs = MemlParser::parse(Rule::meml, raw_input);
+    match pairs {
+        Ok(x) => x,
+        x => panic!("{}", x.unwrap_err()),
+    }
+}
+
+pub fn get_definitions(pairs: Pairs<Rule>) -> (DefinitionMap, Vec<Pair<Rule>>) {
+    let mut local_definitions = HashMap::from([
+        ("strings".to_string(), HashMap::new()),
+        ("elements".to_string(), HashMap::new()),
+        ("functions".to_string(), HashMap::new()),
+    ]);
     let mut remaining = Vec::new();
 
-    for pair in meml {
+    for pair in pairs {
         match pair.as_rule() {
-            Rule::const_def_local => {
+            Rule::string_const_def => {
                 let mut inner_rules = pair.into_inner();
-                local_defs.insert(
-                    format!("${}", inner_rules.next().unwrap().as_str()),
-                    Definition::Constant(parse_string(
-                        inner_rules.next().unwrap(),
-                        &local_defs,
-                        &ext_defs,
-                    )),
-                );
+                let key = inner_rules.next().unwrap().as_str().to_string();
+                let val = Definition::String(parse_string(
+                    inner_rules.next().unwrap(),
+                    &local_definitions,
+                    None,
+                ));
+                local_definitions
+                    .get_mut("strings")
+                    .unwrap()
+                    .insert(key, val);
             }
-            Rule::const_def_extern => {
-                let mut inner_rules = pair.into_inner().next().unwrap().into_inner();
-                exports.insert(
-                    format!("${}", inner_rules.next().unwrap().as_str()),
-                    Definition::Constant(parse_string(
-                        inner_rules.next().unwrap(),
-                        &local_defs,
-                        &ext_defs,
-                    )),
-                );
-            }
-            Rule::object_def_local => {
+            Rule::element_const_def => {
                 let mut inner_rules = pair.into_inner();
-                local_defs.insert(
-                    format!("!{}", inner_rules.next().unwrap().as_str()),
-                    Definition::Object(Object::builder(inner_rules.next().unwrap())),
+                local_definitions.get_mut("elements").unwrap().insert(
+                    inner_rules.next().unwrap().as_str().to_string(),
+                    Definition::Element(Element::factory(inner_rules.next().unwrap())),
                 );
             }
-            Rule::object_def_extern => {
-                let mut inner_rules = pair.into_inner().next().unwrap().into_inner();
-                exports.insert(
-                    format!("!{}", inner_rules.next().unwrap().as_str()),
-                    Definition::Object(Object::builder(inner_rules.next().unwrap())),
-                );
-            }
-            Rule::list_def_local => {
+            Rule::func_def => {
                 let mut inner_rules = pair.into_inner();
-                local_defs.insert(
-                    format!("*{}", inner_rules.next().unwrap().as_str().to_string()),
-                    Definition::List(
-                        inner_rules
-                            .map(|p| parse_string(p, &local_defs, &ext_defs))
-                            .collect(),
-                    ),
+                let name = inner_rules.next().unwrap().as_str().to_string();
+                let arg_names = inner_rules.next().unwrap().into_inner().map(|pair| pair.as_str().to_string()).collect();
+                local_definitions.get_mut("functions").unwrap().insert(
+                    name,
+                    Definition::Function(Element::function(inner_rules.next().unwrap(), arg_names)),
                 );
-            }
-            Rule::list_def_extern => {
-                let mut inner_rules = pair.into_inner().next().unwrap().into_inner();
-                exports.insert(
-                    format!("*{}", inner_rules.next().unwrap().as_str().to_string()),
-                    Definition::List(
-                        inner_rules
-                            .map(|p| parse_string(p, &local_defs, &ext_defs))
-                            .collect(),
-                    ),
-                );
-            }
-            Rule::macro_def_local => {
-                let object_builder = MacroFn::construct(pair);
-                local_defs.insert(object_builder.0, object_builder.1);
-            }
-            Rule::macro_def_extern => {
-                let object_builder = MacroFn::construct(pair.into_inner().next().unwrap());
-                exports.insert(object_builder.0, object_builder.1);
-            }
-            Rule::include => {
-                let mut inner_rules = pair.into_inner();
-                let def_name = format!(
-                    "{}{}",
-                    inner_rules.next().unwrap().as_str(),
-                    inner_rules.next().unwrap().as_str()
-                );
-                let value = ext_defs.get(&def_name);
-                local_defs.insert(def_name, value.unwrap().clone());
             }
             Rule::EOI => (),
             _ => remaining.push(pair),
         }
     }
 
-    // println!("defs {:#?}", local_defs);
-    return (local_defs, exports, remaining);
+    return (local_definitions, remaining);
 }
 
-pub fn get_content(
-    pairs: Vec<Pair<Rule>>,
-    local_defs: HashMap<String, Definition>,
-    ext_defs: &HashMap<String, Definition>,
-    meta_properties: &HashMap<String, HashMap<String, Vec<String>>>,
-) -> Vec<Object> {
+pub fn get_content(pairs: Vec<Pair<Rule>>, local_definitions: DefinitionMap) {
     let mut root = Vec::new();
-
+    
     for pair in pairs {
         match pair.as_rule() {
-            Rule::object => {
-                // println!("{:#?}", pair);
-                root.push(Object::construct(pair, &local_defs, &ext_defs));
+            Rule::element => {
+                root.push(Element::construct(pair, &local_definitions, None));
             }
             _ => unreachable!(),
         }
     }
-
-    // println!("{:#?}", root);
-    return root;
-}
-
-fn parse_string(
-    pair: Pair<Rule>,
-    local_defs: &HashMap<String, Definition>,
-    ext_defs: &HashMap<String, Definition>,
-) -> String {
-    let mut result = String::new();
-
-    for component in pair.into_inner() {
-        match component.as_rule() {
-            Rule::text => result.push_str(component.as_str()),
-            _ => {
-                let defs = match component.as_rule() {
-                    Rule::const_use_local => local_defs,
-                    Rule::const_use_extern => ext_defs,
-                    _ => unreachable!(),
-                };
-
-                let span = component.as_span();
-                let name = component.into_inner().next().unwrap().as_str();
-                if let Some(value) = defs.get(&format!("${}", name)) {
-                    if let Definition::Constant(def) = value {
-                        result.push_str(def.as_str());
-                    }
-                } else {
-                    println!("{:#?}", span);
-                }
-            }
-        }
-    }
-    return result;
+    
+    println!("{:#?}", root);
+    println!("{}", root
+        .iter()
+        .map(|i| i.as_xml())
+        .collect::<Vec<String>>()
+        .join(""));
 }

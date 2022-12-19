@@ -15,114 +15,84 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-// Base elements
-name          =  { (ASCII_ALPHA | "_" | "-")+ ~ ASCII_DIGIT* }
-value         =  { ASCII_DIGIT ~ ASCII_DIGIT* }
-delim         =  { "," | ";" | ":" | "|" | "/" | "\\" | "&" | " " }
-string        =  { (const_use | text)* }
-def_ident     =  { const_ident | objdef_ident | list_ident | macro_ident }
-delim_arg     = _{ "[" ~ delim ~ "]" }
-line          = _{ (!NEWLINE ~ ANY)* }
-indent        = _{ " "{4} | "\t" }
-arrow         = _{ " -> " }
-def           = _{ "new " }
-extern_ident  = _{ "ext " }
-include_ident = _{ "use " }
-rename_ident  = _{ " as " }
-const_ident   = _{ "$" }
-objdef_ident  = _{ "!" }
-list_ident    = _{ "*" }
-macro_ident   = _{ "@" }
-object_ident  = _{ "/" }
-mute_ident    = _{ "." }
-text          = @{ (!(const_use | macro_expand | NEWLINE) ~ ANY)+ }
-
-
-// Comments
-comment     = _{ "//" ~ line }
-
-mute_block  = _{
-    mute_ident ~ line ~ (NEWLINE ~ indent ~ line)*
+// Spaces
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+ws         = _{ WHITESPACE }
+COMMENT    = _{
+	("//" ~ (!NEWLINE ~ ANY)*) 
 }
-mute_object = _{
-    PUSH(indent*) ~ mute_ident ~ line ~
-    (NEWLINE ~ (PEEK ~ indent{2}) ~ line)* ~
-    DROP
-}
+mute_block = _{ "{" ~ (!"}" ~ ANY)* ~ "}" }
 
 
-// Definitions and substitutions
-const_def_local  =  { const_ident ~ name ~ (" " ~ string)? }
-const_def_extern =  { extern_ident ~ const_def_local }
-const_def        = _{ def ~ (const_def_local | const_def_extern) }
-const_use_local  =  { const_ident ~ name ~ "\\" }
-const_use_extern =  { extern_ident ~ const_use_local }
-const_use        = _{ const_use_local | const_use_extern }
+// Object names
+char      = _{ ASCII_ALPHANUMERIC | "_" | "-" }
+name      = @{ char+ }
+namespace = @{ (char+ ~ &":")? }
 
-object_def_local  =  { objdef_ident ~ name ~ " " ~ indented_object }
-object_def_extern =  { extern_ident ~ object_def_local }
-object_def        = _{ def ~ (object_def_local | object_def_extern) }
-object_use_local  =  { objdef_ident ~ name }
-object_use_extern =  { extern_ident ~ object_use_local }
-object_use        = _{ object_use_local | object_use_extern }
 
-list_def_local     =  { list_ident ~ name ~ (NEWLINE ~ indent ~ string)+ }
-list_def_extern    =  { extern_ident ~ list_def_local }
-list_def           = _{ def ~ (list_def_local | list_def_extern) }
-list_expand_local  =  { list_ident ~ name ~ arrow ~ indented_object+ }
-list_expand_extern =  { extern_ident ~ list_expand_local }
-list_expand        = _{ list_expand_local | list_expand_extern }
+// Brackets
+leb = _{ "{" }  // opening element bracket
+reb = _{ "}" }  // closing element bracket
+lab = _{ "(" }  // opening argument bracket
+rab = _{ ")" }  // closing argument bracket
 
-macro_def_local     =  {
-    macro_ident ~ name ~
-    "[" ~ value ~ "]" ~ delim_arg? ~
-    ((NEWLINE ~ &indent) | " ") ~ indented_object
-}
-macro_def_extern    =  { extern_ident ~ macro_def_local }
-macro_def           = _{ def ~ (macro_def_local | macro_def_extern) }
-macro_expand_local  =  { macro_ident ~ name ~ delim_arg? ~ " " ~ string ~ object_body* }
-macro_expand_extern =  { extern_ident ~ macro_expand_local }
-macro_expand        = _{
-    PUSH(indent*) ~
-    (macro_expand_local | macro_expand_extern) ~
-    DROP
+
+// Keywords
+def_kw   = _{ "def" }
+keyword  =  { def_kw }
+
+
+// Quotes
+sq       = _{ PUSH("\"" | "'") }
+eq       = _{ POP }
+qtext    =  { (!PEEK ~ !sconst ~ !sarg ~ !NEWLINE ~ ANY)+ }
+sconst   =  { "$(" ~ name ~ ")" }
+sarg     =  { "${" ~ name ~ "}" }
+qcontent = ${ (qtext | sconst | sarg)* }
+string   =  { sq ~ qcontent ~ eq }
+
+
+// Defs
+def_preamble      = _{ def_kw ~ ws ~ name }
+def_colon         = _{  ws? ~ ":" ~ ws }
+arg_names         =  { (ws* ~ name)+ }
+
+string_const_def  = ${ def_preamble ~ def_colon ~ string }
+element_const_def = ${ def_preamble ~ def_colon ~ element }
+func_def          = ${
+    def_preamble ~ ws? ~
+    lab ~ ws? ~ arg_names ~ ws? ~ rab ~
+   def_colon ~ element
 }
 
-meta_property_expand = { extern_ident ~ name ~ "." ~ name ~ arrow ~ indented_object+ }
-
-include = { include_ident ~ def_ident ~ name ~ (rename_ident ~ name)? }
+def               = _{ string_const_def | element_const_def | func_def }
 
 
-// Object components
-object          =  { object_ident ~ name ~ object_pre_body? ~ object_body* }
-indented_object = _{
-    PUSH(indent*) ~
-    object ~
-    DROP
+// Element components
+attribute  = !{ name ~ ":" ~ string }
+attributes = ${ (ws* ~ attribute)* }
+
+const_use  = @{ name }
+argument   = @{ string }
+args       =  { (ws* ~ argument)+ }
+func_use   =  { name ~ lab ~ args ~ rab }
+
+child      = _{ element | func_use | const_use }
+children   = ${ (ws* ~ child)* }
+
+content    =  { string? }
+
+
+// Element definition
+element  = !{
+    namespace ~ ":"? ~ name ~
+    leb ~
+    attributes ~
+    children ~
+    content ~
+    reb
 }
-object_pre_body = _{ " " ~ (object | property | content) }
-object_body     = _{
-    NEWLINE ~ (
-        (PEEK ~ indent ~ (
-            property | object_use | list_expand | meta_property_expand |
-            content | mute_object | comment
-        )) |
-        (&(PEEK ~ indent) ~ (indented_object | macro_expand))
-    )
-}
-
-property = { "* " ~ name ~ (" " ~ string)? }
-content  = { "=" ~ " " ~ string }
 
 
-// A complete meml file
-meml = _{ SOI ~ (
-    // Definitions
-    const_def | object_def | list_def | macro_def |
-    // Substitutions
-    object_use | list_expand | macro_expand | include |
-    // Non-indented objects
-    !(indent) ~ indented_object |
-    // Ignored lines
-    comment | mute_block | mute_object | NEWLINE
-)* ~ EOI }
+// File definition
+meml = _{ SOI ~ (element | (&keyword ~ def) | mute_block)* ~ EOI }
