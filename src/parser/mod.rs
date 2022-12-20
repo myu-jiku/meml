@@ -55,13 +55,17 @@ pub fn parse_raw(raw_input: &str) -> Pairs<Rule> {
     }
 }
 
-pub fn get_definitions(pairs: Pairs<Rule>) -> (DefinitionMap, Vec<Pair<Rule>>) {
+pub fn get_definitions<'a>(
+    pairs: Pairs<'a, Rule>,
+    external_definitions: &DefinitionMap<'a>,
+) -> (DefinitionMap<'a>, DefinitionMap<'a>, Vec<Pair<'a, Rule>>) {
     let mut local_definitions = HashMap::from([
         ("strings".to_string(), HashMap::new()),
         ("elements".to_string(), HashMap::new()),
         ("functions".to_string(), HashMap::new()),
     ]);
-    let mut remaining = Vec::new();
+    let exports = DefinitionMap::new();
+    let mut remaining = Vec::<Pair<Rule>>::new();
 
     for pair in pairs {
         match pair.as_rule() {
@@ -88,7 +92,12 @@ pub fn get_definitions(pairs: Pairs<Rule>) -> (DefinitionMap, Vec<Pair<Rule>>) {
             Rule::func_def => {
                 let mut inner_rules = pair.into_inner();
                 let name = inner_rules.next().unwrap().as_str().to_string();
-                let arg_names = inner_rules.next().unwrap().into_inner().map(|pair| pair.as_str().to_string()).collect();
+                let arg_names = inner_rules
+                    .next()
+                    .unwrap()
+                    .into_inner()
+                    .map(|pair| pair.as_str().to_string())
+                    .collect();
                 local_definitions.get_mut("functions").unwrap().insert(
                     name,
                     Definition::Function(Element::function(inner_rules.next().unwrap(), arg_names)),
@@ -99,12 +108,12 @@ pub fn get_definitions(pairs: Pairs<Rule>) -> (DefinitionMap, Vec<Pair<Rule>>) {
         }
     }
 
-    return (local_definitions, remaining);
+    return (local_definitions, exports, remaining);
 }
 
-pub fn get_content(pairs: Vec<Pair<Rule>>, local_definitions: DefinitionMap) {
+pub fn get_content(pairs: Vec<Pair<Rule>>, local_definitions: DefinitionMap) -> Vec<Element> {
     let mut root = Vec::new();
-    
+
     for pair in pairs {
         match pair.as_rule() {
             Rule::element => {
@@ -113,11 +122,6 @@ pub fn get_content(pairs: Vec<Pair<Rule>>, local_definitions: DefinitionMap) {
             _ => unreachable!(),
         }
     }
-    
-    println!("{:#?}", root);
-    println!("{}", root
-        .iter()
-        .map(|i| i.as_xml())
-        .collect::<Vec<String>>()
-        .join(""));
+
+    return root;
 }
