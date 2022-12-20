@@ -18,8 +18,3 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 use super::*;
-
-#[test]
-fn test_parse() {
-    test()
-}

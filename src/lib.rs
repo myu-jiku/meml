@@ -23,117 +23,139 @@ extern crate pest_derive;
 
 mod parser;
 
-pub fn parse_manifest(manifest_path: &str) {}
+use std::{collections::HashMap, fs, path::Path};
 
-pub fn test() {
-    let input = r#"
-{ LICENSE
+use pest::Parser;
 
-YGO Destiny – A Yu-Gi-Oh! sealed draft simulator written in rust.
-Copyright (C) 2022  myujiku
+use parser::{MemlParser, Rule};
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License version 3 as
-published by the Free Software Foundation.
+pub fn parse_manifest(manifest_path: &str) {
+    let manifest_file = Path::new(manifest_path);
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-LICENSE }
-
-
-def property(name content): property {
-    name: "${name}"
-    "${content}"
-}
-
-def class_name: "YGOWindow"
-def parent_class: "AdwApplicationWindow"
-
-interface { template {
-    class: "$(class_name)"
-    parent: "$(parent_class)"
-    property("width-request" "640")
-    property("height-request" "480")
-    property {
-        name: "content"
-        toast_overlay
+    // Panic if the Path is not a file
+    if !manifest_file.is_file() {
+        panic!("Manifest `{}` is not a file.", manifest_path);
     }
-}}
 
-def toast_overlay: object {
-    class: "AdwToastOverlay"
-    id: "toast_overlay"
+    let raw_content = fs::read_to_string(manifest_path).expect("Could not read manifest file.");
 
-    child { object {
-        class: "AdwLeaflet"
-        id: "leaflet"
-        property("can-navigate-back" "true")
-        property("can-unfold" "false")
-        property("transition-type" "slide")
-        child { object {
-            class: "AdwLeafletPage"
-            property {
-                name: "child"
-                main_box
+    let parser_result = MemlParser::parse(Rule::meml, &raw_content);
+    let manifest_rules = if let Ok(rules) = parser_result {
+        rules
+    } else {
+        panic!("{}", parser_result.unwrap_err());
+    };
+
+    let (manifest_definitions, manifest_exports, manifest_contents) =
+        parser::get_definitions(manifest_rules, &HashMap::new());
+
+    let root_dir = manifest_file.parent().unwrap();
+
+    for section in parser::get_content(manifest_contents, manifest_definitions) {
+        let mut action = String::new();
+        let mut directories = Vec::<String>::new();
+        let mut files = Vec::<String>::new();
+        let mut extension = String::new();
+        let mut target = String::new();
+
+        for (name, value) in section.arguments {
+            match name.as_str() {
+                "action" => action = value.to_string(),
+                "directory" => directories.push(value),
+                "file" => files.push(value),
+                "change_extension" => extension = value.to_string(),
+                "target" => target = value.to_string(),
+                _ => panic!(
+                    "Unexpected property `{}` in section `{}`. Expected one of `action`, `directory`, `file`, `change_extension` and `target`.",
+                    name,
+                    section.name,
+                ),
             }
-        }}
-    }}
-}
+        }
 
-def main_box: object {
-    class: "GtkBox"
-    property("orientation" "vertical")
-    property("vexpand" "true")
-    property("hexpand" "true")
-    header_bar
-    child { object {
-        class: "GtkScrolledWindow"
-        property("min-content-height" "200")
-        property("hscrollbar-policy" "never")
-        property("vexpand" "true")
-        child { object {
-            class: "AdwClamp"
-            property("maximum-size" "800")
-            property("orientation" "horizontal")
-            collection_list
-        }}
-    }}
-}
+        // Sort the files and remove duplicates
+        files.sort_unstable();
+        files.dedup();
 
-def header_bar: child { object {
-    class: "AdwHeaderBar"
-    child { object {
-        class: "GtkButton"
-        property("icon-name" "open-menu-symbolic")
-    }}
-    property {
-        name: "title-widget"
-        object {
-            class: "AdwWindowTitle"
-            property("title" "YGO Destiny")
+        let is_action_none = action == "none";
+
+        if action.is_empty() {
+            panic!("Section `{}`: No action specified. Add `action: \"none\"` as a section property to disable this check.", section.name);
+        } else if target.is_empty() && !is_action_none {
+            panic!(
+                "Section `{}`: No target directory specified in.",
+                section.name
+            );
+        } else {
+            if !(directories.is_empty() && files.is_empty()) {
+                let mut file_paths = Vec::new();
+
+                for directory in directories {
+                    let path = root_dir.join(directory);
+                    if path.is_dir() {
+                        file_paths.append(
+                            &mut fs::read_dir(path)
+                                .unwrap()
+                                .map(|item| item.unwrap().path())
+                                .filter(|item| {
+                                    let ext = item.extension();
+                                    ext.is_some() && ext.unwrap() == "meml"
+                                })
+                                .collect(),
+                        );
+                    } else {
+                        panic!(
+                            "Section `{}`: Directory `{}` not found.",
+                            section.name,
+                            path.display()
+                        );
+                    }
+                }
+
+                file_paths.append(&mut files.iter().map(|item| root_dir.join(item)).collect());
+
+                println!("{:#?}", file_paths);
+
+                if !is_action_none {
+                    fs::create_dir_all(root_dir.join(&target)).expect(&format!(
+                        "Section `{}`: Could not create target directories.",
+                        section.name
+                    ));
+                }
+
+                for path in file_paths {
+                    let raw_content = fs::read_to_string(&path).expect(&format!(
+                        "Section `{}`: Could not read file `{}`.",
+                        section.name,
+                        path.display()
+                    ));
+
+                    let parser_result = MemlParser::parse(Rule::meml, &raw_content);
+
+                    let rules = if let Ok(rules) = parser_result {
+                        rules
+                    } else {
+                        panic!("{}", parser_result.unwrap_err());
+                    };
+
+                    let (definitions, exports, contents) =
+                        parser::get_definitions(rules, &manifest_exports);
+
+                    let elements = parser::get_content(contents, definitions);
+
+                    println!(
+                        "{}",
+                        elements.iter()
+                            .map(|i| i.as_xml())
+                            .collect::<Vec<String>>()
+                            .join("")
+                    );
+                }
+            } else {
+                panic!("Section `{}`: No input specified. Please add one or more of either `file` or `directory` as a property.", section.name);
+            }
         }
     }
-}}
-
-def collection_list: child { object {
-    class: "YGOCollectionList"
-    id: "collection_list"
-    property("orientation" "vertical")
-    property("vexpand" "true")
-    property("hexpand" "true")
-    property("valign" "center")
-}}
-    "#;
-
-    let pairs = parser::parse_raw(input);
-    let (local_definitions, unparsed) = parser::get_definitions(pairs);
-    parser::get_content(unparsed, local_definitions);
 }
 
 #[cfg(test)]
