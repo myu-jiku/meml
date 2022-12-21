@@ -95,4 +95,4 @@ element  = !{
 
 
 // File definition
-meml = _{ SOI ~ (element | (&keyword ~ def) | mute_block)* ~ EOI }
+meml = _{ SOI ~ (child | (&keyword ~ def) | mute_block)* ~ EOI }
