@@ -66,51 +66,135 @@ pub fn get_definitions<'a>(
         ("elements".to_string(), HashMap::new()),
         ("functions".to_string(), HashMap::new()),
     ]);
-    let exports = DefinitionMap::new();
+    let mut exports = local_definitions.clone();
     let mut remaining = Vec::<Pair<Rule>>::new();
 
     for pair in pairs {
-        match pair.as_rule() {
-            Rule::string_const_def => {
-                let mut inner_rules = pair.into_inner();
-                let key = inner_rules.next().unwrap().as_str().to_string();
-                let val = Definition::String(parse_string(
-                    inner_rules.next().unwrap(),
-                    &local_definitions,
-                    None,
-                ));
-                local_definitions
-                    .get_mut("strings")
-                    .unwrap()
-                    .insert(key, val);
-            }
-            Rule::element_const_def => {
-                let mut inner_rules = pair.into_inner();
-                local_definitions.get_mut("elements").unwrap().insert(
-                    inner_rules.next().unwrap().as_str().to_string(),
-                    Definition::Element(Element::factory(inner_rules.next().unwrap())),
-                );
-            }
-            Rule::func_def => {
-                let mut inner_rules = pair.into_inner();
-                let name = inner_rules.next().unwrap().as_str().to_string();
-                let arg_names = inner_rules
-                    .next()
-                    .unwrap()
-                    .into_inner()
-                    .map(|pair| pair.as_str().to_string())
-                    .collect();
-                local_definitions.get_mut("functions").unwrap().insert(
-                    name,
-                    Definition::Function(Element::function(inner_rules.next().unwrap(), arg_names)),
-                );
-            }
-            Rule::EOI => (),
-            _ => remaining.push(pair),
-        }
+        let (strings, elements, functions) = eval_definition(
+            pair,
+            external_definitions,
+            &mut local_definitions,
+            &mut exports,
+            &mut remaining,
+        );
+        local_definitions
+            .get_mut("strings")
+            .unwrap()
+            .extend(strings);
+        local_definitions
+            .get_mut("elements")
+            .unwrap()
+            .extend(elements);
+        local_definitions
+            .get_mut("functions")
+            .unwrap()
+            .extend(functions);
     }
 
     return (local_definitions, exports, remaining);
+}
+
+fn eval_definition<'a>(
+    pair: Pair<'a, Rule>,
+    external_definitions: &DefinitionMap<'a>,
+    local_definitions: &mut DefinitionMap<'a>,
+    exports: &mut DefinitionMap<'a>,
+    remaining: &mut Vec<Pair<'a, Rule>>,
+) -> (
+    HashMap<String, Definition<'a>>,
+    HashMap<String, Definition<'a>>,
+    HashMap<String, Definition<'a>>,
+) {
+    let mut strings = HashMap::new();
+    let mut elements = HashMap::new();
+    let mut functions = HashMap::new();
+
+    match pair.as_rule() {
+        Rule::string_const_def => {
+            let mut inner_rules = pair.into_inner();
+            let key = inner_rules.next().unwrap().as_str().to_string();
+            let val = Definition::String(parse_string(
+                inner_rules.next().unwrap(),
+                &local_definitions,
+                None,
+            ));
+            strings.insert(key, val);
+        }
+        Rule::element_const_def => {
+            let mut inner_rules = pair.into_inner();
+            elements.insert(
+                inner_rules.next().unwrap().as_str().to_string(),
+                Definition::Element(Element::factory(inner_rules.next().unwrap())),
+            );
+        }
+        Rule::func_def => {
+            let mut inner_rules = pair.into_inner();
+            let name = inner_rules.next().unwrap().as_str().to_string();
+            let arg_names = inner_rules
+                .next()
+                .unwrap()
+                .into_inner()
+                .map(|pair| pair.as_str().to_string())
+                .collect();
+            functions.insert(
+                name,
+                Definition::Function(Element::function(inner_rules.next().unwrap(), arg_names)),
+            );
+        }
+        Rule::export => {
+            let (strings, elements, functions) = eval_definition(
+                pair.into_inner().next().unwrap(),
+                external_definitions,
+                local_definitions,
+                exports,
+                remaining,
+            );
+            exports.get_mut("strings").unwrap().extend(strings);
+            exports.get_mut("elements").unwrap().extend(elements);
+            exports.get_mut("functions").unwrap().extend(functions);
+        }
+        Rule::include => {
+            let span = pair.as_span();
+            let mut inner_rules = pair.into_inner();
+            let def_type = inner_rules.next().unwrap().as_str();
+            let def_category = format!("{}s", def_type);
+            let def_name = inner_rules.next().unwrap().as_str().to_string();
+            if let Some(value) = external_definitions
+                .get(&def_category)
+                .unwrap()
+                .get(&def_name)
+            {
+                local_definitions
+                    .get_mut(&def_category)
+                    .unwrap()
+                    .insert(def_name, value.clone());
+            } else {
+                panic!(
+                    "{}",
+                    Error::new_from_span(
+                        ErrorVariant::<()>::CustomError {
+                            message: format!(
+                                "undefined {} constant; available values: {}",
+                                def_type,
+                                external_definitions
+                                    .get(&def_category)
+                                    .unwrap()
+                                    .keys()
+                                    .map(|item| format!("`{}`", item))
+                                    .collect::<Vec<String>>()
+                                    .join(", ")
+                            )
+                        },
+                        span,
+                    )
+                );
+            }
+        }
+        Rule::EOI => (),
+        _ => remaining.push(pair),
+    }
+
+    return (strings, elements, functions);
 }
 
 pub fn get_contents(pairs: Vec<Pair<Rule>>, local_definitions: DefinitionMap) -> Vec<Element> {

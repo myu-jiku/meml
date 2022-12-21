@@ -19,11 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 LICENSE }
 
-export def message: "hello world!"
+include <string> message
 
-xml_test {
-    action: "xml"
-    directory: "in"
-    target: "out"
-    change_extension: "xml"
+root {
+    imported: "$(message)"
 }

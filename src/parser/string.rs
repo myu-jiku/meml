@@ -42,7 +42,7 @@ pub fn parse_string(
                         "{}",
                         Error::new_from_span(
                             ErrorVariant::<()>::CustomError {
-                                message: "undefined constant".to_string()
+                                message: "undefined string constant".to_string()
                             },
                             pair.as_span(),
                         )
