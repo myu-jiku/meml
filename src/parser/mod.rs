@@ -113,7 +113,7 @@ pub fn get_definitions<'a>(
     return (local_definitions, exports, remaining);
 }
 
-pub fn get_content(pairs: Vec<Pair<Rule>>, local_definitions: DefinitionMap) -> Vec<Element> {
+pub fn get_contents(pairs: Vec<Pair<Rule>>, local_definitions: DefinitionMap) -> Vec<Element> {
     let mut root = Vec::new();
     let mut element_container = OnceCell::with_value(Element::default());
 

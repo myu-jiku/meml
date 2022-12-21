@@ -23,7 +23,11 @@ extern crate pest_derive;
 
 mod parser;
 
-use std::{collections::HashMap, fs, path::Path};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use pest::Parser;
 
@@ -38,20 +42,14 @@ pub fn parse_manifest(manifest_path: &str) {
     }
 
     let raw_content = fs::read_to_string(manifest_path).expect("Could not read manifest file.");
-
-    let parser_result = MemlParser::parse(Rule::meml, &raw_content);
-    let manifest_rules = if let Ok(rules) = parser_result {
-        rules
-    } else {
-        panic!("{}", parser_result.unwrap_err());
-    };
+    let manifest_rules = parser::parse_raw(&raw_content);
 
     let (manifest_definitions, manifest_exports, manifest_contents) =
         parser::get_definitions(manifest_rules, &HashMap::new());
 
     let root_dir = manifest_file.parent().unwrap();
 
-    for section in parser::get_content(manifest_contents, manifest_definitions) {
+    for section in parser::get_contents(manifest_contents, manifest_definitions) {
         let mut action = String::new();
         let mut directories = Vec::<String>::new();
         let mut files = Vec::<String>::new();
@@ -124,28 +122,63 @@ pub fn parse_manifest(manifest_path: &str) {
                 }
 
                 for path in file_paths {
+                    let basename = path.file_stem().unwrap().to_str().unwrap();
+
                     let raw_content = fs::read_to_string(&path).expect(&format!(
                         "Section `{}`: Could not read file `{}`.",
                         section.name,
                         path.display()
                     ));
-
-                    let parser_result = MemlParser::parse(Rule::meml, &raw_content);
-
-                    let rules = if let Ok(rules) = parser_result {
-                        rules
-                    } else {
-                        panic!("{}", parser_result.unwrap_err());
-                    };
+                    let rules = parser::parse_raw(&raw_content);
 
                     let (definitions, exports, contents) =
                         parser::get_definitions(rules, &manifest_exports);
 
-                    let elements = parser::get_content(contents, definitions);
+                    let elements = parser::get_contents(contents, definitions);
+
+                    let target_path = if !is_action_none {
+                        root_dir.join(&target).join(format!(
+                            "{}.{}",
+                            basename,
+                            if extension.is_empty() {
+                                ".meml"
+                            } else {
+                                &extension
+                            }
+                        ))
+                    } else {
+                        PathBuf::new()
+                    };
+
+                    match action.as_str() {
+                        "xml" => {
+                            let content = elements
+                                .iter()
+                                .map(|item| item.as_xml())
+                                .collect::<Vec<String>>()
+                                .join("");
+
+                            if !target_path.is_file()
+                                || (content != fs::read_to_string(&target_path).unwrap())
+                            {
+                                fs::write(&target_path, content).expect(&format!(
+                                    "Section `{}`: Could not write to `{}`",
+                                    section.name,
+                                    target_path.display()
+                                ));
+                            }
+                        }
+                        "none" => (),
+                        _ => panic!(
+                            "Section `{}`: Invalid action `{}`. Possible values: `xml`, `none`",
+                            section.name, action
+                        ),
+                    }
 
                     println!(
                         "{}",
-                        elements.iter()
+                        elements
+                            .iter()
                             .map(|i| i.as_xml())
                             .collect::<Vec<String>>()
                             .join("")
