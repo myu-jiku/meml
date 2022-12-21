@@ -29,10 +29,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use pest::Parser;
-
-use parser::{MemlParser, Rule};
-
 pub fn parse_manifest(manifest_path: &str) {
     let manifest_file = Path::new(manifest_path);
 
