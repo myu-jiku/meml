@@ -211,7 +211,11 @@ pub fn get_contents(pairs: Vec<Pair<Rule>>, local_definitions: DefinitionMap) ->
                 elem.eval_child(pair, &local_definitions, None);
                 root.append(&mut elem.children);
             }
-            Rule::func_use => {}
+            Rule::func_use => {
+                let elem = element_container.get_mut().unwrap();
+                elem.eval_child(pair, &local_definitions, None);
+                root.append(&mut elem.children);
+            }
             _ => unreachable!(),
         }
     }
