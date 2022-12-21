@@ -39,7 +39,8 @@ rab = _{ ")" }  // closing argument bracket
 
 // Keywords
 def_kw   = _{ "def" }
-keyword  =  { def_kw }
+exp_kw   = _{ "export" }
+keyword  =  { def_kw | exp_kw }
 
 
 // Quotes
@@ -54,7 +55,7 @@ string   =  { sq ~ qcontent ~ eq }
 
 // Defs
 def_preamble      = _{ def_kw ~ ws ~ name }
-def_colon         = _{  ws? ~ ":" ~ ws }
+def_colon         = _{ ws? ~ ":" ~ ws }
 arg_names         =  { (ws* ~ name)+ }
 
 string_const_def  = ${ def_preamble ~ def_colon ~ string }
@@ -65,7 +66,9 @@ func_def          = ${
    def_colon ~ element
 }
 
-def               = _{ string_const_def | element_const_def | func_def }
+_def              = _{ string_const_def | element_const_def | func_def }
+export            =  { exp_kw ~ _def }
+def               = _{ _def | export }
 
 
 // Element components
