@@ -1,4 +1,5 @@
-/*
+{ LICENSE
+
 meml – XML replacement written in Rust with the pest library <https://pest.rs>.
 Developed to be used in ygo_destiny <https://github.com/myuujiku/ygo_destiny/>.
 Copyright (C) 2022  myujiku
@@ -15,6 +16,12 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-*/
 
-use super::*;
+LICENSE }
+
+xml_test {
+    action: "xml"
+    directory: "in"
+    target: "out"
+    change_extension: "xml"
+}
