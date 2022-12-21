@@ -23,6 +23,8 @@ mod string;
 
 use std::collections::HashMap;
 
+use once_cell::sync::OnceCell;
+
 use pest::{
     error::{Error, ErrorVariant},
     iterators::{Pair, Pairs},
@@ -113,12 +115,19 @@ pub fn get_definitions<'a>(
 
 pub fn get_content(pairs: Vec<Pair<Rule>>, local_definitions: DefinitionMap) -> Vec<Element> {
     let mut root = Vec::new();
+    let mut element_container = OnceCell::with_value(Element::default());
 
     for pair in pairs {
         match pair.as_rule() {
             Rule::element => {
                 root.push(Element::construct(pair, &local_definitions, None));
             }
+            Rule::const_use => {
+                let elem = element_container.get_mut().unwrap();
+                elem.eval_child(pair, &local_definitions, None);
+                root.append(&mut elem.children);
+            }
+            Rule::func_use => {}
             _ => unreachable!(),
         }
     }

@@ -85,54 +85,63 @@ impl Element {
         }
 
         for child in pairs.next().unwrap().into_inner() {
-            match child.as_rule() {
-                Rule::element => self.children.push(Element::construct(
-                    child,
-                    local_definitions,
-                    function_arguments,
-                )),
-                Rule::const_use => {
-                    if let Some(value) = local_definitions
-                        .get("elements")
-                        .unwrap()
-                        .get(child.as_str())
-                    {
-                        if let Definition::Element(def) = value {
-                            self.children.push(def.construct_element(local_definitions));
-                        }
-                    } else {
-                        panic!(
-                            "{}",
-                            Error::new_from_span(
-                                ErrorVariant::<()>::CustomError {
-                                    message: "undefined element constant".to_string()
-                                },
-                                child.as_span(),
-                            )
-                        );
-                    }
-                }
-                Rule::func_use => {
-                    let mut inner_rules = child.into_inner();
-                    let name = inner_rules.next().unwrap().as_str();
-                    let args = inner_rules
-                        .next()
-                        .unwrap()
-                        .into_inner()
-                        .map(|pair| parse_string(pair, local_definitions, None))
-                        .collect();
-                    if let Some(value) = local_definitions.get("functions").unwrap().get(name) {
-                        if let Definition::Function(def) = value {
-                            self.children.push(def.call(args, &local_definitions))
-                        }
-                    }
-                }
-                _ => unimplemented!(),
-            }
+            self.eval_child(child, local_definitions, function_arguments);
         }
 
         if let Some(string) = pairs.next().unwrap().into_inner().next() {
             self.content = parse_string(string, local_definitions, function_arguments);
+        }
+    }
+
+    pub fn eval_child(
+        &mut self,
+        child: Pair<Rule>,
+        local_definitions: &DefinitionMap,
+        function_arguments: Option<&Arguments>,
+    ) {
+        match child.as_rule() {
+            Rule::element => self.children.push(Element::construct(
+                child,
+                local_definitions,
+                function_arguments,
+            )),
+            Rule::const_use => {
+                if let Some(value) = local_definitions
+                    .get("elements")
+                    .unwrap()
+                    .get(child.as_str())
+                {
+                    if let Definition::Element(def) = value {
+                        self.children.push(def.construct_element(local_definitions));
+                    }
+                } else {
+                    panic!(
+                        "{}",
+                        Error::new_from_span(
+                            ErrorVariant::<()>::CustomError {
+                                message: "undefined element constant".to_string()
+                            },
+                            child.as_span(),
+                        )
+                    );
+                }
+            }
+            Rule::func_use => {
+                let mut inner_rules = child.into_inner();
+                let name = inner_rules.next().unwrap().as_str();
+                let args = inner_rules
+                    .next()
+                    .unwrap()
+                    .into_inner()
+                    .map(|pair| parse_string(pair, local_definitions, None))
+                    .collect();
+                if let Some(value) = local_definitions.get("functions").unwrap().get(name) {
+                    if let Definition::Function(def) = value {
+                        self.children.push(def.call(args, &local_definitions))
+                    }
+                }
+            }
+            _ => unimplemented!(),
         }
     }
 
@@ -142,10 +151,6 @@ impl Element {
         } else {
             format!("{}:{}", self.namespace, self.name)
         };
-
-        // let arguments = self.arguments.iter().fold(String::new(), |init, item| {
-        //     format!("{} {}=\"{}\"",  init, item.0, item.1)
-        // });
 
         let arguments = self
             .arguments
