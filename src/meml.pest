@@ -35,12 +35,15 @@ leb = _{ "{" }  // opening element bracket
 reb = _{ "}" }  // closing element bracket
 lab = _{ "(" }  // opening argument bracket
 rab = _{ ")" }  // closing argument bracket
+ltb = _{ "<" }  // opening type bracket
+rtb = _{ ">" }  // closing type bracket
 
 
 // Keywords
 def_kw   = _{ "def" }
 exp_kw   = _{ "export" }
-keyword  =  { def_kw | exp_kw }
+use_kw   = _{ "include" }
+keyword  =  { def_kw | exp_kw | use_kw }
 
 
 // Quotes
@@ -57,6 +60,7 @@ string   =  { sq ~ qcontent ~ eq }
 def_preamble      = _{ def_kw ~ ws ~ name }
 def_colon         = _{ ws? ~ ":" ~ ws }
 arg_names         =  { (ws* ~ name)+ }
+def_type          =  { "string" | "element" | "function" }
 
 string_const_def  = ${ def_preamble ~ def_colon ~ string }
 element_const_def = ${ def_preamble ~ def_colon ~ element }
@@ -68,7 +72,8 @@ func_def          = ${
 
 _def              = _{ string_const_def | element_const_def | func_def }
 export            =  { exp_kw ~ _def }
-def               = _{ _def | export }
+include           = ${ use_kw ~ ws ~ ltb ~ def_type ~ rtb ~ ws ~ name }
+def               = _{ _def | export | include }
 
 
 // Element components
