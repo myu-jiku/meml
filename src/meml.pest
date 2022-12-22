@@ -27,7 +27,8 @@ mute_block = _{ "{" ~ (!"}" ~ ANY)* ~ "}" }
 // Object names
 char      = _{ ASCII_ALPHANUMERIC | "_" | "-" }
 name      = @{ char+ }
-namespace = @{ (char+ ~ &":")? }
+rename    = @{ name? }
+namespace = @{ (name ~ &":")? }
 
 
 // Brackets
@@ -75,7 +76,8 @@ list_def          = ${ def_preamble ~ def_colon ~ llb ~ ws? ~ args ~ ws? ~ rlb }
 
 _def              = _{ string_const_def | element_const_def | func_def | list_def }
 export            =  { exp_kw ~ _def }
-include           = ${ use_kw ~ ws ~ ltb ~ def_type ~ rtb ~ ws ~ name }
+use_rename        = _{ (ws ~ "as" ~ ws)? ~ rename }
+include           = ${ use_kw ~ ws ~ ltb ~ def_type ~ rtb ~ ws ~ name ~ use_rename }
 def               = _{ _def | export | include }
 
 
