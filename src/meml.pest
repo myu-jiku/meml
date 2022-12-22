@@ -19,7 +19,7 @@
 WHITESPACE = _{ " " | "\t" | NEWLINE }
 ws         = _{ WHITESPACE }
 COMMENT    = _{
-	("//" ~ (!NEWLINE ~ ANY)*) 
+    ("//" ~ (!NEWLINE ~ ANY)*)
 }
 mute_block = _{ "{" ~ (!"}" ~ ANY)* ~ "}" }
 
@@ -35,6 +35,8 @@ leb = _{ "{" }  // opening element bracket
 reb = _{ "}" }  // closing element bracket
 lab = _{ "(" }  // opening argument bracket
 rab = _{ ")" }  // closing argument bracket
+llb = _{ "[" }  // opening list bracket
+rlb = _{ "]" }  // closing list bracket
 ltb = _{ "<" }  // opening type bracket
 rtb = _{ ">" }  // closing type bracket
 
@@ -60,7 +62,7 @@ string   =  { sq ~ qcontent ~ eq }
 def_preamble      = _{ def_kw ~ ws ~ name }
 def_colon         = _{ ws? ~ ":" ~ ws }
 arg_names         =  { (ws* ~ name)+ }
-def_type          =  { "string" | "element" | "function" }
+def_type          =  { "string" | "element" | "function" | "list" }
 
 string_const_def  = ${ def_preamble ~ def_colon ~ string }
 element_const_def = ${ def_preamble ~ def_colon ~ element }
@@ -69,8 +71,9 @@ func_def          = ${
     lab ~ ws? ~ arg_names ~ ws? ~ rab ~
    def_colon ~ element
 }
+list_def          = ${ def_preamble ~ def_colon ~ llb ~ ws? ~ args ~ ws? ~ rlb }
 
-_def              = _{ string_const_def | element_const_def | func_def }
+_def              = _{ string_const_def | element_const_def | func_def | list_def }
 export            =  { exp_kw ~ _def }
 include           = ${ use_kw ~ ws ~ ltb ~ def_type ~ rtb ~ ws ~ name }
 def               = _{ _def | export | include }
@@ -84,8 +87,9 @@ const_use  = @{ name }
 argument   = @{ string }
 args       =  { (ws* ~ argument)+ }
 func_use   =  { name ~ lab ~ args ~ rab }
+list_use   =  { llb ~ name ~ rlb ~ name ~ "=>" ~ element }
 
-child      = _{ element | func_use | const_use }
+child      = _{ element | func_use | const_use | list_use }
 children   = ${ (ws* ~ child)* }
 
 content    =  { string? }
