@@ -44,7 +44,7 @@ rtb = _{ ">" }  // closing type bracket
 // Keywords
 def_kw   = _{ "def" }
 exp_kw   = _{ "export" }
-use_kw   = _{ "include" }
+use_kw   = _{ "use" }
 keyword  =  { def_kw | exp_kw | use_kw }
 
 
