@@ -21,7 +21,10 @@ ws         = _{ WHITESPACE }
 COMMENT    = _{
     ("//" ~ (!NEWLINE ~ ANY)*)
 }
-mute_block = _{ "{" ~ (!"}" ~ ANY)* ~ "}" }
+mute_block = _{
+    ("/" ~ PUSH("*")+ ~ (!(PEEK ~ "/") ~ ANY)* ~ POP ~ "/") |
+    ("/*" ~ "*/")
+}
 
 
 // Object names
