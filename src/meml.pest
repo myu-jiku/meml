@@ -63,6 +63,7 @@ string   =  { sq ~ qcontent ~ eq }
 def_preamble      = _{ def_kw ~ ws ~ name }
 def_colon         = _{ ws? ~ ":" ~ ws }
 arg_names         =  { (ws* ~ name)+ }
+list_elements     =  { (ws* ~ argument)* }
 def_type          =  { "string" | "element" | "function" | "list" }
 
 string_const_def  = ${ def_preamble ~ def_colon ~ string }
@@ -72,7 +73,7 @@ func_def          = ${
     lab ~ ws? ~ arg_names ~ ws? ~ rab ~
    def_colon ~ element
 }
-list_def          = ${ def_preamble ~ def_colon ~ llb ~ ws? ~ args ~ ws? ~ rlb }
+list_def          = ${ def_preamble ~ def_colon ~ llb ~ ws? ~ list_elements ~ ws? ~ rlb }
 
 _def              = _{ string_const_def | element_const_def | func_def | list_def }
 export            =  { exp_kw ~ _def }
